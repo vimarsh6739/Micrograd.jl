@@ -8,11 +8,10 @@ mutable struct Value{T <: Real}
   deps::Vector{Value{T}}
   depth::Int
   _back::Function
-
 end
 
 # Outer constructor that takes data and an array of dependencies
-function Value{T}(data::T, deps::Vector{Value{T}}) where T <: Real
+function Value(data::T, deps::Vector{Value{T}}) where T <: Real
     # Compute the depth as the maximum depth of dependencies (or 0 if none)
     depth = isempty(deps) ? 0 : maximum(v -> v.depth, deps)
     # Sort the dependencies by their depth for proper backprop ordering
@@ -22,17 +21,9 @@ function Value{T}(data::T, deps::Vector{Value{T}}) where T <: Real
 end
 
 # Outer constructor for a Value with no dependencies.
-function Value{T}(data::T) where T <: Real
-    return Value{T}(data, Value{T}[])
+function Value(data::T) where T <: Real
+    return Value(data, Value{T}[])
 end
-
-# Constructor for explicit type conversion.
-function Value(::Type{T}, data::Real) where {T<:Real}
-    return Value{T}(T(data))
-end
-
-# Default constructor using Float32 when no type is provided.
-Value(data::Real) = Value(Float32, data)
 
 # For single-line display (like in arrays)
 function Base.show(io::IO, v::Value{T}) where T
@@ -47,10 +38,12 @@ function Base.show(io::IO, ::MIME"text/plain", v::Value{T}) where T
 end
 
 function backward(v::Value)
-    v.grad = one(T)
-    for dep in v.deps
-        dep._back()
+    v.grad = one(typeof(v.data))
+    function _backward(v::Value)
+        v._back()
+        for dep in v.deps _backward(dep) end
     end
+    _backward(v)
 end
 
 function Base.:+(x::Value, y::Value)
